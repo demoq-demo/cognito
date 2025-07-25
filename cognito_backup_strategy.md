@@ -1,6 +1,225 @@
 ## Note the cognito backup lambda can be manually triggered without any parameters.
 
 
+# Cognito Primary Backup System
+
+## Overview
+This document outlines the automated backup system for Amazon Cognito User Pools, including what is backed up automatically vs. manually, and the complete flow to S3 storage.
+
+## 🔄 Backup Flow Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant EB as EventBridge
+    participant L as Lambda Function
+    participant C as Cognito
+    participant S3 as S3 Bucket
+    participant DDB as DynamoDB
+    participant DR as DR Region S3
+    
+    Note over EB,DR: 🟢 AUTOMATED BACKUP PROCESS
+    
+    rect rgb(144, 238, 144)
+        Note over EB: Scheduled Trigger (Hourly)
+        EB->>+L: Invoke Backup Lambda
+    end
+    
+    rect rgb(255, 255, 224)
+        Note over EB: Event-Driven Trigger
+        EB->>+L: User Creation Event
+    end
+    
+    rect rgb(173, 216, 230)
+        Note over L,C: 🔍 DATA COLLECTION PHASE
+        L->>+C: List Users (Paginated)
+        C-->>-L: User Data + Attributes
+        
+        L->>+C: Describe User Pool
+        C-->>-L: Pool Configuration
+        
+        L->>+C: List App Clients
+        C-->>-L: Client Configurations
+        
+        L->>+C: List Groups
+        C-->>-L: Group Data
+        
+        L->>+C: List Users in Groups
+        C-->>-L: Group Memberships
+        
+        L->>+C: List Identity Providers
+        C-->>-L: SAML/OIDC Providers
+        
+        L->>+C: List Resource Servers
+        C-->>-L: OAuth2 Resource Servers
+        
+        L->>+C: Describe User Pool Domain
+        C-->>-L: Custom Domain Config
+        
+        L->>+C: Get UI Customization
+        C-->>-L: Branding/CSS
+        
+        L->>+C: Describe Risk Configuration
+        C-->>-L: Advanced Security Settings
+    end
+    
+    rect rgb(255, 192, 203)
+        Note over L,S3: 💾 STORAGE PHASE
+        L->>+S3: Put Backup Object
+        Note right of S3: Path: cognito-backup/YYYY/MM/DD/<br/>pool-id-HHMMSS.json
+        S3-->>-L: Success
+        
+        L->>+DDB: Store Metadata
+        Note right of DDB: Backup timestamp, S3 key,<br/>user count, etc.
+        DDB-->>-L: Success
+    end
+    
+    rect rgb(255, 218, 185)
+        Note over S3,DR: 🔄 CROSS-REGION REPLICATION
+        S3->>DR: Auto-replicate to DR Region
+        Note right of DR: STANDARD_IA Storage Class
+    end
+    
+    L-->>-EB: Backup Complete
+```
+
+## 📊 What Gets Backed Up
+
+### 🟢 Automatically Backed Up Components
+
+| Component | Details | Frequency |
+|-----------|---------|-----------|
+| **User Data** | All users, attributes, status | Hourly + Event-driven |
+| **User Pool Configuration** | Policies, MFA, password rules | Hourly + Event-driven |
+| **App Clients** | Client IDs, settings, OAuth flows | Hourly + Event-driven |
+| **Groups** | Group definitions and memberships | Hourly + Event-driven |
+| **Identity Providers** | SAML/OIDC provider configs | Hourly + Event-driven |
+| **Resource Servers** | OAuth2 resource server definitions | Hourly + Event-driven |
+| **Custom Domains** | Domain configurations | Hourly + Event-driven |
+| **UI Customization** | Branding, CSS, logos | Hourly + Event-driven |
+| **Risk Configuration** | Advanced security, threat protection | Hourly + Event-driven |
+
+### 🔴 Manual Configuration Required
+
+| Component | Reason | Action Required |
+|-----------|--------|-----------------|
+| **WAF Configuration** | Complex rule dependencies | Manual documentation |
+| **CloudTrail Integration** | Service-level configuration | Manual setup in DR |
+| **Lambda Triggers** | Function dependencies | Manual deployment |
+| **Custom Message Templates** | May contain sensitive data | Manual review/setup |
+
+## 🏗️ Infrastructure Components
+
+### Storage Architecture
+```
+Primary Region (us-east-1)
+├── 📦 S3 Bucket: cognito-backup-prod-{account-id}
+│   ├── 🔐 AES256 Encryption
+│   ├── 📝 Versioning Enabled
+│   ├── 🗓️ 90-day Lifecycle Policy
+│   └── 📁 Structure: cognito-backup/YYYY/MM/DD/
+│
+├── 🗃️ DynamoDB: cognito-backup-metadata-prod
+│   ├── 🔑 Keys: user_pool_id + backup_date
+│   ├── 💰 Pay-per-request billing
+│   └── 🔄 Point-in-time recovery
+│
+└── 🔄 Cross-Region Replication
+    └── DR Region (us-west-2)
+        └── 📦 DR S3 Bucket (STANDARD_IA)
+```
+
+### Lambda Function Details
+- **Runtime**: Python 3.11
+- **Memory**: 512 MB
+- **Timeout**: 15 minutes
+- **Triggers**: 
+  - ⏰ Scheduled (hourly)
+  - 📢 Event-driven (user creation)
+
+## 🔧 Backup Process Details
+
+### Data Collection Flow
+1. **User Enumeration**: Paginated retrieval of all users
+2. **Configuration Extraction**: Pool settings, policies, MFA config
+3. **Client Analysis**: OAuth flows, redirect URIs, scopes
+4. **Group Mapping**: Group definitions and user memberships
+5. **Provider Integration**: SAML/OIDC identity provider configs
+6. **Security Settings**: Risk configuration and threat protection
+7. **Customization**: UI branding and custom domains
+
+### Storage Strategy
+- **Path Structure**: `cognito-backup/YYYY/MM/DD/pool-id-HHMMSS.json`
+- **Encryption**: Server-side AES256
+- **Metadata**: Stored in DynamoDB for quick queries
+- **Retention**: 90-day automatic cleanup
+- **Replication**: Cross-region to DR bucket
+
+## 🚨 Manual Backup Considerations
+
+### WAF Configuration
+```bash
+# Manual documentation required for:
+- Rate limiting rules
+- IP allowlist/blocklist  
+- Custom rule conditions
+- Rule priorities and actions
+```
+
+### Lambda Triggers
+```bash
+# Requires separate backup of:
+- Pre-signup triggers
+- Post-confirmation triggers
+- Custom message triggers
+- Pre-authentication triggers
+```
+
+## 📈 Monitoring & Alerts
+
+### CloudWatch Metrics
+- Backup success/failure rates
+- Processing duration
+- Data volume trends
+- Error patterns
+
+### Recommended Alarms
+- Lambda function failures
+- S3 replication delays
+- DynamoDB throttling
+- Cross-region sync issues
+
+## 🔄 Recovery Process
+
+### Automated Recovery
+1. Retrieve backup from S3
+2. Parse JSON configuration
+3. Recreate User Pool structure
+4. Restore users and groups
+5. Configure app clients
+6. Set up identity providers
+
+### Manual Recovery Steps
+1. Review WAF configurations
+2. Redeploy Lambda triggers
+3. Validate custom domains
+4. Test authentication flows
+5. Update DNS records if needed
+
+## 📋 Backup Validation Checklist
+
+- [ ] User count matches source
+- [ ] Group memberships preserved
+- [ ] App client configurations intact
+- [ ] Identity providers functional
+- [ ] Custom domains accessible
+- [ ] UI customizations applied
+- [ ] Security policies enforced
+- [ ] Cross-region replication active
+
+
+---
+
+
 ``` yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Cognito Backup Infrastructure - Primary Region'
