@@ -168,9 +168,45 @@ DR Region (us-west-2)
 ```
 
 ### Lambda Function Specifications
-- **Find Backup**: Python 3.11, 60s timeout, finds latest backup by timestamp
-- **Restore**: Python 3.11, 15min timeout, 512MB memory, full restoration
-- **Manual Trigger**: Python 3.11, 60s timeout, initiates Step Functions
+
+#### Find Latest Backup Lambda
+- **Runtime**: Python 3.11
+- **Timeout**: 60 seconds
+- **Memory**: 128 MB (default)
+- **Purpose**: Finds latest backup by timestamp
+- **Engineer Notes**: 
+  - Lists S3 objects with prefix `cognito-backup/`
+  - Filters by user pool ID in object key
+  - Sorts by `LastModified` timestamp to find most recent
+  - Invokes Restore Lambda asynchronously with S3 key
+  - Returns immediately to Step Functions (non-blocking)
+
+#### Restore Lambda
+- **Runtime**: Python 3.11
+- **Timeout**: 15 minutes
+- **Memory**: 512 MB
+- **Purpose**: Full restoration of Cognito User Pool
+- **Engineer Notes**:
+  - Downloads backup JSON from S3 DR bucket
+  - Parses and validates backup data structure
+  - Filters out system attributes (`sub`, `email_verified`, etc.)
+  - Creates user pool with preserved name and policies
+  - Batch imports users (handles pagination for large datasets)
+  - Recreates groups, clients, IDPs, resource servers
+  - Applies UI customization and threat protection settings
+  - Sends detailed success/failure notification via SNS
+
+#### Manual DR Trigger Lambda
+- **Runtime**: Python 3.11
+- **Timeout**: 60 seconds
+- **Memory**: 128 MB (default)
+- **Purpose**: Initiates Step Functions orchestration
+- **Engineer Notes**:
+  - Accepts `user_pool_id` parameter from manual invocation
+  - Starts Step Functions execution with unique name
+  - Passes user pool ID to orchestration workflow
+  - Returns execution ARN for tracking
+  - Used for manual DR activation scenarios
 
 ## 🔧 Restoration Process Details
 
