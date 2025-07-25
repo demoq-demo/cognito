@@ -1,7 +1,8 @@
 # Cognito Primary Backup System
 
 ## ⚠️ Prerequisites
-<span style="color:red">**IMPORTANT**: Run the DR YAML file first to get the ARN of the DR bucket which the backup needs for S3 replication (S3 destination needs to exist).</span>
+> **🚨 IMPORTANT**: Run the DR YAML file first to get the ARN of the DR bucket which the backup needs for S3 replication (S3 destination needs to exist).
+
 
 **Note**: The cognito backup lambda can be manually triggered without any parameters.
 
