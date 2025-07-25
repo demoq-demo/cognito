@@ -1,5 +1,5 @@
 
-# Option 3: Cognito Backup and Restore Strategy
+# Cognito Backup and Restore Strategy
 
 This document details the backup and restore approach for Amazon Cognito user pools as a disaster recovery strategy.
 
