@@ -357,5 +357,3 @@ aws lambda invoke \
   - DNS propagation: 0-60 minutes
 
 ---
-
-*Last Updated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")*
