@@ -15,7 +15,7 @@ Parameters:
   # UserPoolIds:
   #   Type: CommaDelimitedList
   #   Description: 'Comma-separated list of Cognito User Pool IDs to backup'
-  #   Default: us-east-1_zcrONqHkR,us-east-1_clvIkyGTO, us-east-1_7OqLtTGPz
+  #   Default: us-east-1_ABCDeFghi,us-east-1_jklmNOPQr  ### sample 
   
   BackupSchedule:
     Type: String
