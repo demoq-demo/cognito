@@ -2,7 +2,8 @@
 # Cognito DR Restore System
 
 ## ⚠️ Prerequisites
-> **🚨 IMPORTANT**: This restore system works with backups created by the [primary backup system](https://github.com/demoq-demo/cognito/blob/main/cognito_primary_backup.md). Deploy the backup infrastructure first.
+> **🚨 IMPORTANT**: This restore system works with backups created by the [primary backup system](https://github.com/demoq-demo/cognito/blob/main/cognito_backup_strategy.md). Deploy the backup infrastructure first.
+
 
 ## Overview
 This document outlines the disaster recovery restore system for Amazon Cognito User Pools, showing what gets automatically restored vs. manual configuration required, and the complete restoration flow from S3 backups.
