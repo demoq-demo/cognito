@@ -119,7 +119,7 @@ sequenceDiagram
 
 | Component | Preservation Level | Details |
 |-----------|-------------------|---------|
-| **User Pool Name** | ✅ Exact Original | `kinesis-user-pool` → `kinesis-user-pool` |
+| **User Pool Name** | ✅ Exact Original | e.g.`kinesis-user-pool` → `kinesis-user-pool` |
 | **Users & Attributes** | ✅ Exact Original | All custom/standard attributes preserved |
 | **Usernames** | ✅ Exact Original | UUID or email format maintained |
 | **User Status** | ✅ Exact Original | CONFIRMED/UNCONFIRMED preserved |
