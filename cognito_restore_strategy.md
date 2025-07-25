@@ -2,7 +2,7 @@
 # Cognito DR Restore System
 
 ## ⚠️ Prerequisites
-> **🚨 IMPORTANT**: This restore system works with backups created by the [primary backup system](https://github.com/demoq-demo/cognito/blob/main/cognito_backup_strategy.md). Deploy the backup infrastructure first.
+> **🚨 IMPORTANT**: This restore system works with backups created by the [primary backup system](https://github.com/demoq-demo/cognito/blob/main/cognito_backup_strategy.md).
 
 
 ## Overview
