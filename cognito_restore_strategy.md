@@ -299,26 +299,6 @@ Primary: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXXXXXX/saml2/i
 DR:      https://cognito-idp.us-west-2.amazonaws.com/us-west-2_YYYYYYYYY/saml2/idpresponse
 ```
 
-### Lambda Triggers Configuration
-
-**Cannot be automated** - Must be manually configured in DR region:
-
-```bash
-# Pre-authentication trigger
-aws cognito-idp update-user-pool \
-  --user-pool-id us-west-2_YYYYYYYYY \
-  --lambda-config PreAuthentication=arn:aws:lambda:us-west-2:account:function:pre-auth-dr
-
-# Post-authentication trigger
-aws cognito-idp update-user-pool \
-  --user-pool-id us-west-2_YYYYYYYYY \
-  --lambda-config PostAuthentication=arn:aws:lambda:us-west-2:account:function:post-auth-dr
-
-# Custom message trigger
-aws cognito-idp update-user-pool \
-  --user-pool-id us-west-2_YYYYYYYYY \
-  --lambda-config CustomMessage=arn:aws:lambda:us-west-2:account:function:custom-message-dr
-```
 
 **Why Manual Setup Required:**
 - Lambda functions must exist in DR region
@@ -326,25 +306,7 @@ aws cognito-idp update-user-pool \
 - Function ARNs are region-specific
 - Requires separate deployment pipeline
 
-### Custom Message Templates
 
-**Manual review required** - Templates may contain sensitive data:
-
-```bash
-# Update verification message template
-aws cognito-idp update-user-pool \
-  --user-pool-id us-west-2_YYYYYYYYY \
-  --verification-message-template \
-  DefaultEmailOption=CONFIRM_WITH_LINK \
-  DefaultEmailSubject="Verify your account" \
-  DefaultEmailMessage="Please click {##Verify Email##} to verify your account."
-
-# Update admin create user message template
-aws cognito-idp update-user-pool \
-  --user-pool-id us-west-2_YYYYYYYYY \
-  --admin-create-user-config \
-  InviteMessageTemplate='{"EmailMessage":"Welcome! Your username is {username} and temporary password is {####}","EmailSubject":"Your temporary password"}'
-```
 
 **Manual Review Checklist:**
 - [ ] Remove environment-specific URLs
@@ -352,37 +314,10 @@ aws cognito-idp update-user-pool \
 - [ ] Verify compliance with data protection rules
 - [ ] Test message delivery
 
-### Export User Activity Logs
-
-**Manual CloudWatch integration** - Service-level configuration required:
-
-```bash
-# Enable detailed monitoring
-aws logs create-log-group \
-  --log-group-name /aws/cognito/userpool/us-west-2_YYYYYYYYY
-
-# Set up log stream for user activities
-aws cognito-idp update-user-pool \
-  --user-pool-id us-west-2_YYYYYYYYY \
-  --user-pool-add-ons AdvancedSecurityMode=ENFORCED
-
-# Configure CloudWatch insights queries
-aws logs put-query-definition \
-  --name "Cognito-User-Activities-DR" \
-  --log-group-names "/aws/cognito/userpool/us-west-2_YYYYYYYYY" \
-  --query-string 'fields @timestamp, eventName, sourceIPAddress, userAgent | filter eventName like /SignIn/ | sort @timestamp desc'
-```
-
-**Configuration Steps:**
-1. **Log Group Creation**: Create dedicated CloudWatch log group
-2. **Advanced Security**: Enable detailed logging
-3. **Query Setup**: Configure CloudWatch Insights queries
-4. **Alerting**: Set up CloudWatch alarms for suspicious activities
-5. **Export Setup**: Configure log export to S3 if required
 
 ## 📈 Restoration Metrics & Monitoring
 
-### Performance Benchmarks
+### Performance Benchmarks estimate 
 - **User Pool Creation**: ~2-5 minutes
 - **User Import Rate**: ~1,000 users/minute
 - **Group Creation**: ~30 seconds per group
@@ -465,12 +400,12 @@ aws lambda invoke \
 
 ## 🎯 RTO/RPO Targets
 
-### Recovery Point Objective (RPO)
+### Recovery Point Objective (RPO) Estimate
 - **Target**: 1-2 hours maximum data loss
 - **Factors**: Backup frequency, replication delay
 - **Monitoring**: Backup success rates, replication lag
 
-### Recovery Time Objective (RTO)
+### Recovery Time Objective (RTO) Estimate
 - **Target**: 2-4 hours for complete restoration
 - **Breakdown**:
   - Infrastructure setup: 30 minutes
