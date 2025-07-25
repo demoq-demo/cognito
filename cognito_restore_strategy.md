@@ -1,9 +1,7 @@
-
 # Cognito DR Restore System
 
 ## ⚠️ Prerequisites
 > **🚨 IMPORTANT**: This restore system works with backups created by the [primary backup system](https://github.com/demoq-demo/cognito/blob/main/cognito_backup_strategy.md).
-
 
 ## Overview
 This document outlines the disaster recovery restore system for Amazon Cognito User Pools, showing what gets automatically restored vs. manual configuration required, and the complete restoration flow from S3 backups.
@@ -96,6 +94,9 @@ sequenceDiagram
     
     rect rgb(255, 250, 250)
         Note over RL,WAF: ⚠️ MANUAL CONFIGURATION PHASE
+        Note over RL: Lambda Triggers - Manual Setup Required
+        Note over RL: Custom Message Templates - Manual Review
+        Note over RL: Export User Activity Logs - Manual Config
         RL->>+WAF: Associate Web ACL
         Note right of WAF: WAF rules must exist<br/>in DR region
         WAF-->>-RL: Association Complete
@@ -204,6 +205,9 @@ DR Region (us-west-2)
 |------|--------|----------------|
 | **Update App Configs** | New Pool/Client IDs | 15-30 minutes |
 | **Update Okta/SAML** | New redirect URIs | 10-15 minutes |
+| **Lambda Triggers** | Function dependencies | 20-30 minutes |
+| **Custom Message Templates** | Sensitive data review | 10-20 minutes |
+| **Export User Activity Logs** | CloudWatch integration | 15-25 minutes |
 | **DNS Updates** | New domain endpoints | 5-60 minutes |
 | **Deploy Changes** | Application deployment | 10-30 minutes |
 
@@ -258,6 +262,87 @@ const awsmobile = {
 Primary: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXXXXXX/saml2/idpresponse
 DR:      https://cognito-idp.us-west-2.amazonaws.com/us-west-2_YYYYYYYYY/saml2/idpresponse
 ```
+
+### Lambda Triggers Configuration
+
+**Cannot be automated** - Must be manually configured in DR region:
+
+```bash
+# Pre-authentication trigger
+aws cognito-idp update-user-pool \
+  --user-pool-id us-west-2_YYYYYYYYY \
+  --lambda-config PreAuthentication=arn:aws:lambda:us-west-2:account:function:pre-auth-dr
+
+# Post-authentication trigger
+aws cognito-idp update-user-pool \
+  --user-pool-id us-west-2_YYYYYYYYY \
+  --lambda-config PostAuthentication=arn:aws:lambda:us-west-2:account:function:post-auth-dr
+
+# Custom message trigger
+aws cognito-idp update-user-pool \
+  --user-pool-id us-west-2_YYYYYYYYY \
+  --lambda-config CustomMessage=arn:aws:lambda:us-west-2:account:function:custom-message-dr
+```
+
+**Why Manual Setup Required:**
+- Lambda functions must exist in DR region
+- Cross-region Lambda invocation not supported
+- Function ARNs are region-specific
+- Requires separate deployment pipeline
+
+### Custom Message Templates
+
+**Manual review required** - Templates may contain sensitive data:
+
+```bash
+# Update verification message template
+aws cognito-idp update-user-pool \
+  --user-pool-id us-west-2_YYYYYYYYY \
+  --verification-message-template \
+  DefaultEmailOption=CONFIRM_WITH_LINK \
+  DefaultEmailSubject="Verify your account" \
+  DefaultEmailMessage="Please click {##Verify Email##} to verify your account."
+
+# Update admin create user message template
+aws cognito-idp update-user-pool \
+  --user-pool-id us-west-2_YYYYYYYYY \
+  --admin-create-user-config \
+  InviteMessageTemplate='{"EmailMessage":"Welcome! Your username is {username} and temporary password is {####}","EmailSubject":"Your temporary password"}'
+```
+
+**Manual Review Checklist:**
+- [ ] Remove environment-specific URLs
+- [ ] Update contact information
+- [ ] Verify compliance with data protection rules
+- [ ] Test message delivery
+
+### Export User Activity Logs
+
+**Manual CloudWatch integration** - Service-level configuration required:
+
+```bash
+# Enable detailed monitoring
+aws logs create-log-group \
+  --log-group-name /aws/cognito/userpool/us-west-2_YYYYYYYYY
+
+# Set up log stream for user activities
+aws cognito-idp update-user-pool \
+  --user-pool-id us-west-2_YYYYYYYYY \
+  --user-pool-add-ons AdvancedSecurityMode=ENFORCED
+
+# Configure CloudWatch insights queries
+aws logs put-query-definition \
+  --name "Cognito-User-Activities-DR" \
+  --log-group-names "/aws/cognito/userpool/us-west-2_YYYYYYYYY" \
+  --query-string 'fields @timestamp, eventName, sourceIPAddress, userAgent | filter eventName like /SignIn/ | sort @timestamp desc'
+```
+
+**Configuration Steps:**
+1. **Log Group Creation**: Create dedicated CloudWatch log group
+2. **Advanced Security**: Enable detailed logging
+3. **Query Setup**: Configure CloudWatch Insights queries
+4. **Alerting**: Set up CloudWatch alarms for suspicious activities
+5. **Export Setup**: Configure log export to S3 if required
 
 ## 📈 Restoration Metrics & Monitoring
 
