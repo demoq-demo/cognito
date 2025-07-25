@@ -1,8 +1,9 @@
-## Note the cognito backup lambda can be manually triggered without any parameters.
-   ### Run the DR YAML file first to get the ARN of the DR bucket which the backup needs for S3 replication (S3 destination needs to exist).
-
-
 # Cognito Primary Backup System
+
+## ⚠️ Prerequisites
+<span style="color:red">**IMPORTANT**: Run the DR YAML file first to get the ARN of the DR bucket which the backup needs for S3 replication (S3 destination needs to exist).</span>
+
+**Note**: The cognito backup lambda can be manually triggered without any parameters.
 
 ## Overview
 This document outlines the automated backup system for Amazon Cognito User Pools, including what is backed up automatically vs. manually, and the complete flow to S3 storage.
@@ -18,19 +19,19 @@ sequenceDiagram
     participant DDB as DynamoDB
     participant DR as DR Region S3
     
-    Note over EB,DR: 🟢 AUTOMATED BACKUP PROCESS
+    Note over EB,DR: 🔴 AUTOMATED BACKUP PROCESS
     
-    rect rgb(144, 238, 144)
+    rect rgb(255, 99, 99)
         Note over EB: Scheduled Trigger (Hourly)
         EB->>+L: Invoke Backup Lambda
     end
     
-    rect rgb(255, 255, 224)
+    rect rgb(255, 140, 140)
         Note over EB: Event-Driven Trigger
         EB->>+L: User Creation Event
     end
     
-    rect rgb(173, 216, 230)
+    rect rgb(255, 182, 182)
         Note over L,C: 🔍 DATA COLLECTION PHASE
         L->>+C: List Users (Paginated)
         C-->>-L: User Data + Attributes
@@ -63,7 +64,7 @@ sequenceDiagram
         C-->>-L: Advanced Security Settings
     end
     
-    rect rgb(255, 192, 203)
+    rect rgb(255, 204, 204)
         Note over L,S3: 💾 STORAGE PHASE
         L->>+S3: Put Backup Object
         Note right of S3: Path: cognito-backup/YYYY/MM/DD/<br/>pool-id-HHMMSS.json
@@ -74,7 +75,7 @@ sequenceDiagram
         DDB-->>-L: Success
     end
     
-    rect rgb(255, 218, 185)
+    rect rgb(255, 224, 224)
         Note over S3,DR: 🔄 CROSS-REGION REPLICATION
         S3->>DR: Auto-replicate to DR Region
         Note right of DR: STANDARD_IA Storage Class
