@@ -87,7 +87,7 @@ Important limitations:
 3. **Device Information**: Remembered devices are not exported
 4. **Session Information**: Tokens and sessions are not exported
 
-For detailed strategies to address these limitations, see [cognito_dr_limitations_solutions.md](./cognito_dr_limitations_solutions.md).
+
 
 ### Export Process Flow
 
@@ -305,6 +305,126 @@ To trigger the backup Lambda when a user is created via console:
 ```
 
 **Note**: Console user creation uses `AdminCreateUser` API call. No additional filters needed.
+
+## Manual Updates Required After DR Restore
+
+### Identity Provider (IDP) and Application Configuration Updates
+
+After DR restore, manual updates are required for external IDPs and applications:
+
+#### 1. Okta Configuration Updates
+
+**Required Changes:**
+- **Redirect URIs**: Update to DR region Cognito endpoints
+- **Audience URI**: Update to new user pool ID
+- **Initiate Login URI**: Update to new Cognito domain
+
+**Example:**
+```
+Primary: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXXXXXX/saml2/idpresponse
+DR: https://cognito-idp.us-west-2.amazonaws.com/us-west-2_YYYYYYYYY/saml2/idpresponse
+```
+
+#### 2. Amplify Application Updates
+
+**aws-exports.js Configuration:**
+```javascript
+// Update these values after DR restore
+const awsmobile = {
+    "aws_user_pools_id": "us-west-2_YYYYYYYYY", // New DR pool ID
+    "aws_user_pools_web_client_id": "new_client_id", // New client ID
+    "aws_cognito_region": "us-west-2", // DR region
+    "aws_user_pools_domain": "auth-dr.example.com" // New domain
+};
+```
+
+#### 3. Web Application Updates
+
+**Environment Variables:**
+```bash
+# Update application environment
+COGNITO_USER_POOL_ID=us-west-2_YYYYYYYYY
+COGNITO_CLIENT_ID=new_client_id
+COGNITO_CLIENT_SECRET=new_client_secret
+AWS_REGION=us-west-2
+COGNITO_DOMAIN=auth-dr.example.com
+```
+
+#### 4. Mobile Application Updates
+
+**iOS (amplifyconfiguration.json):**
+```json
+{
+    "auth": {
+        "plugins": {
+            "awsCognitoAuthPlugin": {
+                "UserPool": {
+                    "Default": {
+                        "PoolId": "us-west-2_YYYYYYYYY",
+                        "AppClientId": "new_client_id",
+                        "Region": "us-west-2"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Android (amplifyconfiguration.json):**
+```json
+{
+    "auth": {
+        "plugins": {
+            "awsCognitoAuthPlugin": {
+                "CognitoUserPool": {
+                    "Default": {
+                        "PoolId": "us-west-2_YYYYYYYYY",
+                        "AppClientId": "new_client_id",
+                        "Region": "us-west-2"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+#### 5. Manual Update Checklist
+
+**Critical Updates (RTO Impact):**
+- [ ] Update Okta/SAML redirect URIs
+- [ ] Update Amplify aws-exports.js
+- [ ] Update web app environment variables
+- [ ] Update mobile app configuration files
+- [ ] Update DNS records
+- [ ] Deploy updated configurations
+
+**Post-Recovery:**
+- [ ] Update CI/CD pipelines
+- [ ] Update documentation
+- [ ] Test all authentication flows
+- [ ] Update monitoring configurations
+
+#### 6. Automation Script Example
+
+```bash
+#!/bin/bash
+# DR configuration update script
+
+NEW_POOL_ID="us-west-2_YYYYYYYYY"
+NEW_CLIENT_ID="new_client_id"
+NEW_REGION="us-west-2"
+
+# Update Amplify config
+sed -i "s/aws_user_pools_id.*/aws_user_pools_id: '$NEW_POOL_ID',/" src/aws-exports.js
+sed -i "s/aws_user_pools_web_client_id.*/aws_user_pools_web_client_id: '$NEW_CLIENT_ID',/" src/aws-exports.js
+
+# Update environment
+export COGNITO_USER_POOL_ID=$NEW_POOL_ID
+export COGNITO_CLIENT_ID=$NEW_CLIENT_ID
+export AWS_REGION=$NEW_REGION
+```
 
 ## Disaster Recovery Restore Strategy
 
@@ -780,6 +900,53 @@ def lambda_handler(event, context):
             }),
             Subject='Cognito DR Restore Completed'
         )
+
+## Sample SNS Email Notification
+
+**Subject:** Cognito DR Restore Completed
+
+**Message Body:**
+```json
+{
+  "status": "SUCCESS",
+  "new_user_pool_id": "us-west-2_YYYYYYYYY",
+  "users_restored": 1247,
+  "groups_restored": 5,
+  "app_clients_restored": 3,
+  "identity_providers_restored": 2,
+  "resource_servers_restored": 1,
+  "restore_time": "2024-01-15T14:30:22Z",
+  "backup_source": "cognito-backup/us-east-1_XXXXXXXXX/2024-01-15-14-00-00.json"
+}
+```
+
+**Email Template:**
+```
+Subject: [ALERT] Cognito DR Restore Completed Successfully
+
+Cognito Disaster Recovery restore has completed successfully.
+
+Restore Summary:
+- Status: SUCCESS
+- New User Pool ID: us-west-2_YYYYYYYYY
+- Users Restored: 1,247
+- Groups Restored: 5
+- App Clients Restored: 3
+- Identity Providers Restored: 2
+- Resource Servers Restored: 1
+- Restore Time: 2024-01-15 14:30:22 UTC
+
+Next Steps Required:
+1. Update application configurations with new User Pool ID
+2. Update Okta/IDP redirect URIs
+3. Update DNS records
+4. Test authentication flows
+5. Notify users about password reset requirement
+
+For technical details, see: https://wiki.company.com/cognito-dr-runbook
+
+This is an automated notification from AWS Lambda.
+```
         
         return {
             'statusCode': 200,
@@ -796,6 +963,52 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': str(e)})
         }
 ```
+
+## What Gets Backed Up vs Manual Configuration
+
+### ✅ Automatically Backed Up and Restored
+
+**Core User Pool Configuration:**
+- User pool settings (policies, MFA, verification)
+- Schema attributes (standard and custom)
+- Username configuration and alias attributes
+- Account recovery settings
+- Admin create user configuration
+
+**Users and Access Control:**
+- All users with attributes (excluding system attributes)
+- User status (CONFIRMED, FORCE_CHANGE_PASSWORD, etc.)
+- Groups with descriptions and precedence
+- Group memberships
+- App clients with all settings (new secrets generated)
+
+**Advanced Security Features:**
+- **Domain configuration** - Cognito hosted UI domains
+- **Threat protection settings:**
+  - Enforcement mode (AUDIT/ENFORCED)
+  - Compromised credentials detection and response
+  - Adaptive authentication (account takeover protection)
+  - Risk response actions (Low/Medium/High risk)
+  - **IP address exceptions** (Always-allow and Always-block lists)
+- UI customization (if domain exists)
+
+**Federation and APIs:**
+- Identity providers (SAML, OIDC)
+- Resource servers and scopes
+
+### ❌ Manual Configuration Required
+
+**Infrastructure Integrations:**
+- **WAF associations** - Environment-specific, must be manually configured
+- **Export user activity logs** - CloudWatch integration, manual setup required
+- **Lambda triggers** - Cross-region compatibility issues, manual configuration needed
+- **Email/SMS providers** - SES/SNS integration, security restrictions
+
+**Environment-Specific Settings:**
+- Custom domain certificates (ACM)
+- DNS records and Route 53 configurations
+- Load balancer and CDN settings
+- Monitoring and alerting configurations
 
 ## Manual Configuration Required After Restore
 
@@ -997,7 +1210,7 @@ flowchart TD
 **Important**: The DR restore process preserves original usernames exactly as they were in the primary region:
 
 - **UUID username + email attribute**: `username=a1b2c3d4-e5f6-7890-abcd-ef1234567890` → Uses `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
-- **Email username + email attribute**: `username=user@example.com` → Uses `user@example.com`
+- **Email username + email attribute**: `username=<email>` → Uses `<email>`
 
 **Technical Implementation**:
 - DR user pool removes `UsernameAttributes: ['email']` restriction
@@ -1006,6 +1219,126 @@ flowchart TD
 - Maintains identical user experience across primary and DR regions
 
 **Rationale**: Preserving original usernames ensures users can authenticate with the same credentials they used before DR activation, minimizing user impact during disaster recovery scenarios.
+
+### Manual Updates Required After DR Restore
+
+#### Identity Provider (IDP) and Application Configuration Updates
+
+After DR restore, manual updates are required for external IDPs and applications:
+
+**1. Okta Configuration Updates**
+
+**Required Changes:**
+- **Redirect URIs**: Update to DR region Cognito endpoints
+- **Audience URI**: Update to new user pool ID
+- **Initiate Login URI**: Update to new Cognito domain
+
+**Example:**
+```
+Primary: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXXXXXX/saml2/idpresponse
+DR: https://cognito-idp.us-west-2.amazonaws.com/us-west-2_YYYYYYYYY/saml2/idpresponse
+```
+
+**2. Amplify Application Updates**
+
+**aws-exports.js Configuration:**
+```javascript
+// Update these values after DR restore
+const awsmobile = {
+    "aws_user_pools_id": "us-west-2_YYYYYYYYY", // New DR pool ID
+    "aws_user_pools_web_client_id": "new_client_id", // New client ID
+    "aws_cognito_region": "us-west-2", // DR region
+    "aws_user_pools_domain": "auth-dr.example.com" // New domain
+};
+```
+
+**3. Web Application Updates**
+
+**Environment Variables:**
+```bash
+# Update application environment
+COGNITO_USER_POOL_ID=us-west-2_YYYYYYYYY
+COGNITO_CLIENT_ID=new_client_id
+COGNITO_CLIENT_SECRET=new_client_secret
+AWS_REGION=us-west-2
+COGNITO_DOMAIN=auth-dr.example.com
+```
+
+**4. Mobile Application Updates**
+
+**iOS (amplifyconfiguration.json):**
+```json
+{
+    "auth": {
+        "plugins": {
+            "awsCognitoAuthPlugin": {
+                "UserPool": {
+                    "Default": {
+                        "PoolId": "us-west-2_YYYYYYYYY",
+                        "AppClientId": "new_client_id",
+                        "Region": "us-west-2"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Android (amplifyconfiguration.json):**
+```json
+{
+    "auth": {
+        "plugins": {
+            "awsCognitoAuthPlugin": {
+                "CognitoUserPool": {
+                    "Default": {
+                        "PoolId": "us-west-2_YYYYYYYYY",
+                        "AppClientId": "new_client_id",
+                        "Region": "us-west-2"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**5. Manual Update Checklist**
+
+**Critical Updates (RTO Impact):**
+- [ ] Update Okta/SAML redirect URIs
+- [ ] Update Amplify aws-exports.js
+- [ ] Update web app environment variables
+- [ ] Update mobile app configuration files
+- [ ] Update DNS records
+- [ ] Deploy updated configurations
+
+**Post-Recovery:**
+- [ ] Update CI/CD pipelines
+- [ ] Update documentation
+- [ ] Test all authentication flows
+- [ ] Update monitoring configurations
+
+**6. Automation Script Example**
+
+```bash
+#!/bin/bash
+# DR configuration update script
+
+NEW_POOL_ID="us-west-2_YYYYYYYYY"
+NEW_CLIENT_ID="new_client_id"
+NEW_REGION="us-west-2"
+
+# Update Amplify config
+sed -i "s/aws_user_pools_id.*/aws_user_pools_id: '$NEW_POOL_ID',/" src/aws-exports.js
+sed -i "s/aws_user_pools_web_client_id.*/aws_user_pools_web_client_id: '$NEW_CLIENT_ID',/" src/aws-exports.js
+
+# Update environment
+export COGNITO_USER_POOL_ID=$NEW_POOL_ID
+export COGNITO_CLIENT_ID=$NEW_CLIENT_ID
+export AWS_REGION=$NEW_REGION
+```
 
 ## Cost Considerations
 
