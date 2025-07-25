@@ -19,7 +19,7 @@ Parameters:
   
   BackupSchedule:
     Type: String
-    Default: 'rate(1 hour)'
+    Default: 'rate(1 hour)' ## change to match your backup strategy
     Description: 'Backup frequency schedule'
   
   DRRegion:
