@@ -24,7 +24,7 @@ Parameters:
   
   DRRegion:
     Type: String
-    Default: 'us-west-2'
+    Default: 'us-west-2'  ## change to your DR region
     Description: 'DR region for cross-region replication'
   
   DRBucketArn:
